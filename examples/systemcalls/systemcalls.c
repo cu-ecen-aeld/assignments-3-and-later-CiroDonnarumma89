@@ -47,7 +47,7 @@ bool do_exec(int count, ...)
     va_start(args, count);
     char * command[count+1];
     int i;
-    for(i=0; i<count; i++)
+        for(i=0; i<count; i++)
     {
         command[i] = va_arg(args, char *);
     }
@@ -60,7 +60,7 @@ bool do_exec(int count, ...)
         return false;
     case 0:
         (void) execv(command[0], command);
-        return false;
+        abort();
     default:
         int status;
         if (waitpid(pid, &status, 0) == -1) {
