@@ -1,6 +1,16 @@
+CC=gcc
+COMPILER=$(CROSS_COMPILE)$(CC)
 
-writer: writer.c
-	$(CROSS_COMPILE)-gcc -o writer writer.c
+all: writer
+
+writer: writer.o
+	$(COMPILER) $(LDFLAGS) $^ $(LOADLIBES) $(LDLIBS) -o $@
+
+writer.o: writer.c
+	$(COMPILER) -c $(CPPFLAGS) $(CFLAGS) $^ -o $@
 
 clean:
 	rm -f writer
+	rm -f writer.o
+
+.PHONY: all clean
