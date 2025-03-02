@@ -3,19 +3,16 @@ COMPILER=$(CROSS_COMPILE)$(CC)
 CFLAGS += -O0
 CFLAGS += -g3
 
-all: aesdsocket
+all: build/aesdsocket
 
-aesdsocket: src/main.o src/server_mng.o
+build/aesdsocket: build/src/main.o build/src/tcp_server.o build/src/tcp_connection.o
 	$(COMPILER) $(LDFLAGS) $^ $(LOADLIBES) $(LDLIBS) -o $@
 
-src/main.o: src/main.c
-	$(COMPILER) -c $(CPPFLAGS) $(CFLAGS) $^ -o $@
-
-src/server_mng.o: src/server_mng.c
+build/%.o: %.c
+	mkdir -p $(@D)
 	$(COMPILER) -c $(CPPFLAGS) $(CFLAGS) $^ -o $@
 
 clean:
-	rm -f aesdsocket
-	rm -f src/*.o
+	rm -rf build
 
 .PHONY: clean all

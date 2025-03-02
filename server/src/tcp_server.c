@@ -1,4 +1,4 @@
-#include "server_mng.h"
+#include "tcp_server.h"
 #include <syslog.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -6,52 +6,53 @@
 #include <stdlib.h>
 #include <netdb.h>
 #include <sys/types.h>
+#include <sys/socket.h>
 #include <stdbool.h>
 #include <string.h>
 
-int wait_for_connection(int socketfd)
+
+struct tcp_server_t {
+    int         socketfd;
+    const char* port;
+};
+
+/***
+ * Get sockaddr, IPv4 or IPv6
+ * @param sa: sockaddr structure
+ * @return: pointer to the address
+ */
+static void *get_in_addr(struct sockaddr *sa)
 {
-    char s[INET6_ADDRSTRLEN]; 
-    struct sockaddr client_addrress;
-    socklen_t client_addrress_len = sizeof(client_addrress);
-    
-    printf("server: waiting for connections...\n");
-    int connection_sd = accept(socketfd, &client_addrress, &client_addrress_len);
-    if (connection_sd == -1)
+    if (sa->sa_family == AF_INET)
     {
-        perror("server: failed to accept");
-        syslog(LOG_ERR, "Failed to accept");
+        return &(((struct sockaddr_in *)sa)->sin_addr);
     }
-    printf("accepted\n\r");
-    inet_ntop(client_addrress.sa_family, get_in_addr((struct sockaddr *)&client_addrress), s, sizeof(s));
-    printf("Accepted connection from from %s\n", s);
-    syslog(LOG_DEBUG, "Accepted connection from from %s\n", s);    
-    
-    return connection_sd;
+    else
+    {
+        return &(((struct sockaddr_in6 *)sa)->sin6_addr);
+    }
+
 }
 
 
-
-int create_and_bind_socket(const char* port)
+tcp_server_handle_t* tcp_server_create(const char* port)
 {
-    int ret;
-    int socketfd = -1;
-    struct addrinfo hints, *res = NULL;
+    int             socketfd = -1;
+    struct          addrinfo hints;
+    struct          addrinfo *res = NULL;
+    tcp_server_handle_t*   server = NULL;
     
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_family     = AF_UNSPEC;   // IPv4 or IPv6
     hints.ai_socktype   = SOCK_STREAM; // TCP
     hints.ai_flags      = AI_PASSIVE;  // Use my IP
     
-    ret = getaddrinfo(NULL, port, &hints, &res);
+    int ret = getaddrinfo(NULL, port, &hints, &res);
     
     if (0 == ret)
-    {    
-        // getaddrinfo succeeded
-        bool succeeded = false;
-        
+    {        
         // loop through all the results and bind to the first we can
-        for (struct addrinfo *it = res; (it != NULL) && (!succeeded); it = it->ai_next)
+        for (struct addrinfo *it = res; (it != NULL) && (server == NULL); it = it->ai_next)
         {
             socketfd = socket(it->ai_family, it->ai_socktype, it->ai_protocol);
             
@@ -79,30 +80,83 @@ int create_and_bind_socket(const char* port)
             }
         
             // if we got here, we have a valid socket and it is bound    
-            succeeded = true;
+            server = (tcp_server_handle_t*)malloc(sizeof(tcp_server_handle_t));
+            server->socketfd = socketfd;
+            server->port = port;
         }
     
         // no longer need the linked list of addrinfo
         freeaddrinfo(res);
-        
-        if (!succeeded)
-        {
-            socketfd = -1;
-            fprintf(stderr, "server: failed to create and bind\n");
-            syslog(LOG_ERR, "Failed to create and bind");
-            return -1;
-        }
     }
     else
     {
         // getaddrinfo failed
         fprintf(stderr, "server: getaddrinfo: %s\n", gai_strerror(ret));
         syslog(LOG_ERR, "Failed to get address info: %s", gai_strerror(ret));
-        return -1;
     }
     
-    return socketfd;
+    return server;
 }
+
+
+void tcp_server_destroy(tcp_server_handle_t* server)
+{
+    if (server != NULL)
+    {
+        close(server->socketfd);
+        free(server);
+    }
+}
+
+
+bool tcp_server_listen(tcp_server_handle_t* server)
+{
+    if (listen(server->socketfd, 30) == -1)
+    {
+        perror("server: failed to listen");
+        syslog(LOG_ERR, "Failed to listen");
+        return false;
+    }
+    else
+    {
+        return true;
+    }
+}
+
+
+tcp_connection_t* tcp_server_accept(tcp_server_handle_t* server)
+{
+    char s[INET6_ADDRSTRLEN]; 
+    struct sockaddr client_addrress;
+    socklen_t client_addrress_len = sizeof(client_addrress);
+    
+    int socket = accept(server->socketfd, &client_addrress, &client_addrress_len);
+    if (socket == -1)
+    {
+        perror("Server: failed to accept");
+        syslog(LOG_ERR, "Failed to accept");
+        return NULL;
+    }
+    
+    inet_ntop(client_addrress.sa_family, get_in_addr((struct sockaddr *)&client_addrress), s, sizeof(s));
+
+    tcp_connection_t* connection = tcp_connection_create(socket, s);
+    
+    if (connection == NULL)
+    {
+        close(socket);
+        perror("tcp_connection_create");
+        syslog(LOG_ERR, "Failed to create connection");
+    }
+  
+    return connection;
+}
+
+
+
+
+
+
 
 void save_packet(char *packet)
 {
@@ -189,21 +243,5 @@ void handle_connection(int connection_sd, FILE* fd)
 }
 
 
-/***
- * Get sockaddr, IPv4 or IPv6
- * @param sa: sockaddr structure
- * @return: pointer to the address
- */
-void *get_in_addr(struct sockaddr *sa)
-{
-    if (sa->sa_family == AF_INET)
-    {
-        return &(((struct sockaddr_in *)sa)->sin_addr);
-    }
-    else
-    {
-        return &(((struct sockaddr_in6 *)sa)->sin6_addr);
-    }
 
-}
 
