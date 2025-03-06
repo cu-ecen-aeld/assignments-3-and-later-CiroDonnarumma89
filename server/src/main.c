@@ -16,8 +16,7 @@ int main(int argc, char const *argv[])
 {
     FILE* fd = NULL;
     openlog("aesdsocket", LOG_PID, LOG_USER);
-    
-    
+
     tcp_server_handle_t* server = tcp_server_create("9000");
 
     if (server == NULL)
@@ -26,25 +25,44 @@ int main(int argc, char const *argv[])
         exit(-1);
     }
 
-    if (!tcp_server_listen(server))
+    if (!tcp_server_listen_for_connections(server))
     {
         syslog(LOG_ERR, "Failed to listen");
         tcp_server_destroy(server);
         exit(-1);
     }
 
-    printf("Server: waiting for connections...\n");
-    syslog(LOG_DEBUG, "Server: waiting for connections...");
-    tcp_connection_t* connection = tcp_server_accept(server);
-    printf("Accepted connection from from %s\n", connection->client_address);
-    syslog(LOG_DEBUG, "Accepted connection from from %s\n", connection->client_address);
 
+    while(1)
+    {
+        printf("Server: waiting for connections...\n");
+        syslog(LOG_DEBUG, "Server: waiting for connections...");
+        tcp_connection_t* connection = tcp_server_accept_connection(server);
+        printf("Accepted connection from %s\n", connection->client_address);
+        syslog(LOG_DEBUG, "Accepted connection from from %s\n", connection->client_address);
+        char* message = NULL;
 
-    tcp_connection_destroy(connection);  
+        while(tcp_connection_is_open(connection))
+        {
+            if (tcp_connection_receive_message(connection, &message, '\n'))
+            {
+                printf("received message: %s\n\r", message);
+            }
+        }
+
+        
+        printf("Closed connection from %s\n", connection->client_address);
+        syslog(LOG_DEBUG, "Closed connection from %s\n", connection->client_address);
+        tcp_connection_destroy(connection);
+    }
+
     tcp_server_destroy(server);
-
-
     
+
+
+
+
+
 
     // if (socketfd == -1)
     // {
@@ -67,7 +85,7 @@ int main(int argc, char const *argv[])
 
     // while(!exit_program)
     // {
-    //     int connection_sd = wait_for_connection(socketfd);    
+    //     int connection_sd = wait_for_connection(socketfd);
     //     handle_connection(connection_sd, fd);
     //     close(connection_sd);
     // }

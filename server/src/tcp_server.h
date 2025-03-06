@@ -29,7 +29,7 @@ void tcp_server_destroy(tcp_server_handle_t* server);
  * @param server: server handle
  * @return: true if the server is listening, false otherwise
  */
-bool tcp_server_listen(tcp_server_handle_t* server);
+bool tcp_server_listen_for_connections(tcp_server_handle_t* server);
 
 /***
  * Accept a connection on the server
@@ -38,7 +38,7 @@ bool tcp_server_listen(tcp_server_handle_t* server);
  * @error: return NULL in case of error
  * @note:  the connection handle should be freed by the user
  */
-tcp_connection_t* tcp_server_accept(tcp_server_handle_t* server);
+tcp_connection_t* tcp_server_accept_connection(tcp_server_handle_t* server);
 
 
 /***

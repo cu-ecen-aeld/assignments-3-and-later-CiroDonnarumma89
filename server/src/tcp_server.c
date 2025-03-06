@@ -41,21 +41,21 @@ tcp_server_handle_t* tcp_server_create(const char* port)
     struct          addrinfo hints;
     struct          addrinfo *res = NULL;
     tcp_server_handle_t*   server = NULL;
-    
+
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_family     = AF_UNSPEC;   // IPv4 or IPv6
     hints.ai_socktype   = SOCK_STREAM; // TCP
     hints.ai_flags      = AI_PASSIVE;  // Use my IP
-    
+
     int ret = getaddrinfo(NULL, port, &hints, &res);
-    
+
     if (0 == ret)
-    {        
+    {
         // loop through all the results and bind to the first we can
         for (struct addrinfo *it = res; (it != NULL) && (server == NULL); it = it->ai_next)
         {
             socketfd = socket(it->ai_family, it->ai_socktype, it->ai_protocol);
-            
+
             int yes = 1;
             if (setsockopt(socketfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1) {
                 perror("setsockopt");
@@ -70,7 +70,7 @@ tcp_server_handle_t* tcp_server_create(const char* port)
                 syslog(LOG_ERR, "Failed to create socket");
                 continue;
             }
-                
+
             if (bind(socketfd, it->ai_addr, it->ai_addrlen) == -1)
             {
                 close(socketfd);
@@ -78,13 +78,13 @@ tcp_server_handle_t* tcp_server_create(const char* port)
                 syslog(LOG_ERR, "Failed to bind");
                 continue;
             }
-        
-            // if we got here, we have a valid socket and it is bound    
+
+            // if we got here, we have a valid socket and it is bound
             server = (tcp_server_handle_t*)malloc(sizeof(tcp_server_handle_t));
             server->socketfd = socketfd;
             server->port = port;
         }
-    
+
         // no longer need the linked list of addrinfo
         freeaddrinfo(res);
     }
@@ -94,7 +94,7 @@ tcp_server_handle_t* tcp_server_create(const char* port)
         fprintf(stderr, "server: getaddrinfo: %s\n", gai_strerror(ret));
         syslog(LOG_ERR, "Failed to get address info: %s", gai_strerror(ret));
     }
-    
+
     return server;
 }
 
@@ -109,7 +109,7 @@ void tcp_server_destroy(tcp_server_handle_t* server)
 }
 
 
-bool tcp_server_listen(tcp_server_handle_t* server)
+bool tcp_server_listen_for_connections(tcp_server_handle_t* server)
 {
     if (listen(server->socketfd, 30) == -1)
     {
@@ -124,12 +124,12 @@ bool tcp_server_listen(tcp_server_handle_t* server)
 }
 
 
-tcp_connection_t* tcp_server_accept(tcp_server_handle_t* server)
+tcp_connection_t* tcp_server_accept_connection(tcp_server_handle_t* server)
 {
-    char s[INET6_ADDRSTRLEN]; 
+    char s[INET6_ADDRSTRLEN];
     struct sockaddr client_addrress;
     socklen_t client_addrress_len = sizeof(client_addrress);
-    
+
     int socket = accept(server->socketfd, &client_addrress, &client_addrress_len);
     if (socket == -1)
     {
@@ -137,18 +137,18 @@ tcp_connection_t* tcp_server_accept(tcp_server_handle_t* server)
         syslog(LOG_ERR, "Failed to accept");
         return NULL;
     }
-    
+
     inet_ntop(client_addrress.sa_family, get_in_addr((struct sockaddr *)&client_addrress), s, sizeof(s));
 
     tcp_connection_t* connection = tcp_connection_create(socket, s);
-    
+
     if (connection == NULL)
     {
         close(socket);
         perror("tcp_connection_create");
         syslog(LOG_ERR, "Failed to create connection");
     }
-  
+
     return connection;
 }
 
@@ -180,7 +180,7 @@ void send_all_to_client(int connection_sd)
         perror("/var/tmp/aesdsocketdata");
         syslog(LOG_ERR, "Unable to open file: %s", "/var/tmp/aesdsocketdata");
         exit(-1);
-    } 
+    }
 
     //send all file line by line
     char line[256];
