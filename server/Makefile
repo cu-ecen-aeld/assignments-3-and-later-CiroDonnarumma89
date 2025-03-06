@@ -3,9 +3,9 @@ COMPILER=$(CROSS_COMPILE)$(CC)
 CFLAGS += -O0
 CFLAGS += -g3
 
-all: build/aesdsocket
+all: aesdsocket
 
-build/aesdsocket: build/src/main.o build/src/tcp_server.o build/src/tcp_connection.o
+aesdsocket: build/src/main.o build/src/tcp_server.o build/src/tcp_connection.o
 	$(COMPILER) $(LDFLAGS) $^ $(LOADLIBES) $(LDLIBS) -o $@
 
 build/%.o: %.c
@@ -14,5 +14,6 @@ build/%.o: %.c
 
 clean:
 	rm -rf build
+	rm -rf aesdsocket
 
 .PHONY: clean all

@@ -32,6 +32,8 @@ int main(int argc, char const *argv[])
         exit(-1);
     }
 
+    fd = fopen("/var/tmp/aesdsocketdata", "a+");
+
 
     while(1)
     {
@@ -46,52 +48,21 @@ int main(int argc, char const *argv[])
         {
             if (tcp_connection_receive_message(connection, &message, '\n'))
             {
-                printf("received message: %s\n\r", message);
+                fprintf(fd, "%s\n", message);
+                free(message);
+                tcp_connection_send_file(connection, fd);
+
             }
         }
 
-        
+
         printf("Closed connection from %s\n", connection->client_address);
         syslog(LOG_DEBUG, "Closed connection from %s\n", connection->client_address);
         tcp_connection_destroy(connection);
     }
 
+    fclose(fd);
     tcp_server_destroy(server);
-    
-
-
-
-
-
-
-    // if (socketfd == -1)
-    // {
-    //     perror("server: failed to create and bind socket");
-    //     syslog(LOG_ERR, "Failed to create and bind socket");
-    //     fclose(fd);
-    //     closelog();
-    //     exit(-1);
-    // }
-
-    // if (listen(socketfd, 30) == -1)
-    // {
-    //     perror("server: failed to listen");
-    //     syslog(LOG_ERR, "Failed to listen");
-    //     close(socketfd);
-    //     fclose(fd);
-    //     closelog();
-    //     exit(-1);
-    // }
-
-    // while(!exit_program)
-    // {
-    //     int connection_sd = wait_for_connection(socketfd);
-    //     handle_connection(connection_sd, fd);
-    //     close(connection_sd);
-    // }
-
-    //close(socketfd);
-    //fclose(fd);
     closelog();
 
     return 0;

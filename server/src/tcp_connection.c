@@ -93,7 +93,34 @@ bool tcp_connection_receive_message(tcp_connection_t* connection, char** message
 }
 
 
-bool tcp_connection_send_message(tcp_connection_t* connection, const char* message)
+bool tcp_connection_send_message(tcp_connection_t* connection, const char* message, ssize_t size)
 {
+    ssize_t ret = send(connection->socket, message, strlen(message), 0);
+    if (ret == -1)
+    {
+        perror("send");
+        return false;
+    }
+    else
+    {
+        return true;
+    }
+}
 
+bool tcp_connection_send_file(tcp_connection_t* connection, FILE* fd)
+{
+    long int pos = ftell(fd);
+    rewind(fd);
+
+    char line[256];
+    while (fgets(line, sizeof(line), fd))
+    {
+        if (false == tcp_connection_send_message(connection, line, strlen(line)))
+        {
+            return false;
+        }
+    }
+
+    fseek(fd, pos, SEEK_SET);
+    return true;
 }

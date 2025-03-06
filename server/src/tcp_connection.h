@@ -39,10 +39,21 @@ bool tcp_connection_receive_message(tcp_connection_t* connection, char** message
  * Send a message to the client
  * @param connection: connection handle
  * @param message: message to send
+ * @param size: message size
  * @return: true if the message was sent successfully, false otherwise
  * @error: return false in case of error
  */
-bool tcp_connection_send_message(tcp_connection_t* connection, const char* message);
+bool tcp_connection_send_message(tcp_connection_t* connection, const char* message, ssize_t size);
+
+/***
+ * Send a file to the client
+ * @param connection: connection handle
+ * @param fd: descriptor of file to send
+ * @return: true if the file was sent successfully, false otherwise
+ * @error: return false in case of error
+ */
+bool tcp_connection_send_file(tcp_connection_t* connection, FILE* fd);
+
 
 
 bool tcp_connection_is_open(const tcp_connection_t* connection);
