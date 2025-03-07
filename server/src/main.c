@@ -1,15 +1,22 @@
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 #include <syslog.h>
 #include <stdbool.h>
 #include <unistd.h>
 #include <signal.h>
 #include <errno.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <linux/fs.h>
+#include <linux/limits.h>
 #include "tcp_server.h"
 // Global variables
 const char* filename = "/var/tmp/aesdsocketdata";
 bool exit_program = false; // flag to exit the program
 
+static bool daemonize(void);
 
 
 static void signal_handler(int signal_number)
@@ -58,6 +65,22 @@ int main(int argc, char const *argv[])
         exit(-1);
     }
 
+
+    printf("argc %d\n", argc);
+    printf("argv %s\n", argv[1]);
+    if ((argc == 2) && (0 == strcmp(argv[1], "-d")))
+    {
+        printf("Trying to create a daemon\n");
+        if (true == daemonize())
+        {
+            printf("I am a daemon\n");
+        }
+        else
+        {
+            printf("Failed to create a daemon\n");
+        }
+    }
+
     fd = fopen(filename, "a+");
 
 
@@ -102,4 +125,37 @@ int main(int argc, char const *argv[])
     closelog();
 
     return 0;
+}
+
+static bool daemonize(void)
+{
+    pid_t pid;
+    int i;
+
+    /* create new process */
+    pid = fork();
+    if (pid == -1)
+        exit(EXIT_FAILURE);
+    else if (pid != 0)
+        exit (EXIT_SUCCESS);
+
+    /* create new session and process group */
+    if (setsid() == -1)
+        return false;
+
+    /* set the working directory to the root directory */
+    if (chdir("/") == -1)
+        return false;
+
+    // /* close all open files */
+    // for (i = 0; i < 1024; i++)
+    //     close(i);
+
+    /* redirect fd's 0,1,2 to /dev/null */
+    open("/dev/null", O_RDWR);
+    dup(0);
+    dup(0);
+
+    return true;
+    /* do its daemon thing ...*/
 }
