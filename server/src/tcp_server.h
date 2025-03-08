@@ -39,12 +39,3 @@ bool tcp_server_listen_for_connections(tcp_server_handle_t* server);
  * @note:  the connection handle should be freed by the user
  */
 tcp_connection_t* tcp_server_accept_connection(tcp_server_handle_t* server);
-
-
-/***
- * Handle the connection
- * @param connection_sd: connection file descriptor
- * @param fd: file descriptor to write the data to
- * @error: exit the program in case of error
- */
-void handle_connection(int connection_sd, FILE* fd);
