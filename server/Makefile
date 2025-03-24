@@ -5,7 +5,7 @@ CFLAGS += -g3
 
 all: aesdsocket
 
-aesdsocket: build/src/main.o build/src/tcp_server.o build/src/tcp_connection.o
+aesdsocket: build/src/main.o build/src/tcp_server.o build/src/tcp_connection.o build/src/connection_manager.o
 	$(COMPILER) $(LDFLAGS) $^ $(LOADLIBES) $(LDLIBS) -o $@
 
 build/%.o: %.c

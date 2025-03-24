@@ -1,29 +1,40 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#include <syslog.h>
 #include <stdbool.h>
+
+#include <errno.h>
+#include <fcntl.h>
+#include <syslog.h>
 #include <unistd.h>
 #include <signal.h>
-#include <errno.h>
-#include <sys/types.h>
+#include <pthread.h>
+
 #include <sys/stat.h>
-#include <fcntl.h>
+#include <sys/types.h>
+#include <sys/queue.h>
 #include <linux/fs.h>
 #include <linux/limits.h>
+
+#include "connection_manager.h"
 #include "tcp_server.h"
+
+
 // Global variables
-const char* filename = "/var/tmp/aesdsocketdata";
-bool exit_program = false; // flag to exit the program
+
+const char*             filename            = "/var/tmp/aesdsocketdata";    /*!< file to save the messages */
+bool                    exit_program        = false;                        /*!< flag to exit the program */
+connection_manager_t*   connection_manager  = NULL;                         /*!< connection manager */
+// Data structures
+
+
+// Function prototypes
 
 static bool daemonize(void);
-
-
-static void signal_handler(int signal_number)
-{
-    syslog(LOG_DEBUG, "Caught signal, exiting");
-    exit_program = true;
-}
+static void setup(void);
+static void teardown(void);
+static void signal_handler(int signal_number);
+static void save_message(char* message, const char* filename);
 
 /***
  * Main function
@@ -33,22 +44,23 @@ static void signal_handler(int signal_number)
  */
 int main(int argc, char const *argv[])
 {
-    FILE* fd = NULL;
-    struct sigaction action;
-    memset(&action, 0, sizeof(struct sigaction));
-    action.sa_handler=signal_handler;
-    if (sigaction(SIGTERM, &action, NULL) != 0)
+    setup();
+
+    if ((argc == 2) && (0 == strcmp(argv[1], "-d")))
     {
-        printf("Error %d (%s) registering for SIGTERM", errno, strerror(errno));
-        exit(-1);
-    }
-    if (sigaction(SIGINT, &action, NULL) != 0)
-    {
-        printf("Error %d (%s) registering for SIGINT", errno, strerror(errno));
-        exit(-1);
+        printf("Trying to create a daemon\n");
+        if (true == daemonize())
+        {
+            printf("I am a daemon\n");
+        }
+        else
+        {
+            printf("Failed to create a daemon\n");
+        }
     }
 
-    openlog("aesdsocket", LOG_PID, LOG_USER);
+    connection_manager = connection_manager_create(filename);
+    // TODO: Check connection manager creation
 
     tcp_server_handle_t* server = tcp_server_create("9000");
 
@@ -65,64 +77,23 @@ int main(int argc, char const *argv[])
         exit(-1);
     }
 
-
-    printf("argc %d\n", argc);
-    printf("argv %s\n", argv[1]);
-    if ((argc == 2) && (0 == strcmp(argv[1], "-d")))
-    {
-        printf("Trying to create a daemon\n");
-        if (true == daemonize())
-        {
-            printf("I am a daemon\n");
-        }
-        else
-        {
-            printf("Failed to create a daemon\n");
-        }
-    }
-
-    fd = fopen(filename, "a+");
-
-
     while(!exit_program)
     {
         printf("Server: waiting for connections...\n");
         syslog(LOG_DEBUG, "Server: waiting for connections...");
         tcp_connection_t* connection = tcp_server_accept_connection(server);
-        if (connection == NULL)
+        if (connection != NULL)
         {
-            continue;
+            printf("Accepted connection from %s\n", connection->client_address);
+            syslog(LOG_DEBUG, "Accepted connection from from %s\n", connection->client_address);
+            connection_manager_register_connection(connection_manager, connection);
         }
-        printf("Accepted connection from %s\n", connection->client_address);
-        syslog(LOG_DEBUG, "Accepted connection from from %s\n", connection->client_address);
-        char* message = NULL;
-
-        while(tcp_connection_is_open(connection))
-        {
-            if (tcp_connection_receive_message(connection, &message, '\n'))
-            {
-                fprintf(fd, "%s\n", message);
-                free(message);
-                tcp_connection_send_file(connection, fd);
-            }
-        }
-
-
-        printf("Closed connection from %s\n", connection->client_address);
-        syslog(LOG_DEBUG, "Closed connection from %s\n", connection->client_address);
-        tcp_connection_destroy(connection);
     }
 
     printf("Caught signal, exiting\n");
-    fclose(fd);
     tcp_server_destroy(server);
+    teardown();
 
-    if (remove(filename) == 0) {
-        printf("%s deleted successfully.\n", filename);
-    } else {
-        printf("Error: Unable to delete %s.\n", filename);
-    }
-    closelog();
 
     return 0;
 }
@@ -157,5 +128,54 @@ static bool daemonize(void)
     dup(0);
 
     return true;
-    /* do its daemon thing ...*/
+}
+
+static void setup(void)
+{
+    struct sigaction action;
+    memset(&action, 0, sizeof(struct sigaction));
+    action.sa_handler=signal_handler;
+    if (sigaction(SIGTERM, &action, NULL) != 0)
+    {
+        printf("Error %d (%s) registering for SIGTERM", errno, strerror(errno));
+        exit(-1);
+    }
+    if (sigaction(SIGINT, &action, NULL) != 0)
+    {
+        printf("Error %d (%s) registering for SIGINT", errno, strerror(errno));
+        exit(-1);
+    }
+
+    openlog("aesdsocket", LOG_PID, LOG_USER);
+}
+
+static void teardown(void)
+{
+    if (remove(filename) == 0) {
+        printf("%s deleted successfully.\n", filename);
+    } else {
+        printf("Error: Unable to delete %s.\n", filename);
+    }
+    closelog();
+}
+
+
+static void signal_handler(int signal_number)
+{
+    syslog(LOG_DEBUG, "Caught signal, exiting");
+    exit_program = true;
+}
+
+static void save_message(char* message, const char* filename)
+{
+    FILE* fd = fopen(filename, "a");
+    if (fd == NULL)
+    {
+        perror(filename);
+        syslog(LOG_ERR, "Unable to create or open file: %s", filename);
+        exit(-1);
+    }
+
+    fprintf(fd, "%s\n", message);
+    fclose(fd);
 }

@@ -107,10 +107,14 @@ bool tcp_connection_send_message(tcp_connection_t* connection, const char* messa
     }
 }
 
-bool tcp_connection_send_file(tcp_connection_t* connection, FILE* fd)
+bool tcp_connection_send_file(tcp_connection_t* connection, const char* filename)
 {
-    long int pos = ftell(fd);
-    rewind(fd);
+    FILE* fd = fopen(filename, "r");
+    if (fd == NULL)
+    {
+        perror(filename);
+        return false;
+    }
 
     char line[256];
     while (fgets(line, sizeof(line), fd))
@@ -121,6 +125,5 @@ bool tcp_connection_send_file(tcp_connection_t* connection, FILE* fd)
         }
     }
 
-    fseek(fd, pos, SEEK_SET);
     return true;
 }

@@ -1,11 +1,16 @@
 #pragma once
 
 #include <stdbool.h>
+#include <sys/types.h>
+
+/***
+ * TCP connection handle
+ */
 typedef struct
 {
-    int socket;
-    const char* client_address;
-    bool is_open;
+    int socket;                 /*!< socket file descriptor */
+    const char* client_address; /*!< client address */
+    bool is_open;               /*!< connection status */
 } tcp_connection_t;
 
 
@@ -48,12 +53,16 @@ bool tcp_connection_send_message(tcp_connection_t* connection, const char* messa
 /***
  * Send a file to the client
  * @param connection: connection handle
- * @param fd: descriptor of file to send
+ * @param filename: file to send
  * @return: true if the file was sent successfully, false otherwise
  * @error: return false in case of error
  */
-bool tcp_connection_send_file(tcp_connection_t* connection, FILE* fd);
+bool tcp_connection_send_file(tcp_connection_t* connection, const char* filename);
 
 
-
+/***
+ * Check if the connection is open
+ * @param connection: connection handle
+ * @return: true if the connection is open, false otherwise
+ */
 bool tcp_connection_is_open(const tcp_connection_t* connection);
