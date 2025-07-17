@@ -44,10 +44,12 @@ int aesd_open(struct inode *inode, struct file *filp)
 
 int aesd_release(struct inode *inode, struct file *filp)
 {
+    struct aesd_dev* aesd_dev_ptr = NULL;
+
     PDEBUG("%s\n", __func__);
-    /**
-     * TODO: handle release
-     */
+
+    aesd_dev_ptr = (struct aesd_dev*)(filp->private_data);
+    kfree(aesd_dev_ptr->staging_entry.buffptr);
     return 0;
 }
 
@@ -92,17 +94,16 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count, loff
     ssize_t retval                        = -ENOMEM;
     char*                    bufferptr    = NULL;
     struct aesd_dev*         aesd_dev_ptr = NULL;
-    struct aesd_buffer_entry entry;
 
     PDEBUG("write %zu bytes with offset %lld\n",count,*f_pos);
 
-    memset(&entry, 0x00, sizeof(entry));
     aesd_dev_ptr = (struct aesd_dev*)filp->private_data;
-    bufferptr    = kmalloc(count, GFP_KERNEL);
+    bufferptr    = kmalloc((count + aesd_dev_ptr->staging_entry.size), GFP_KERNEL);
 
     if (bufferptr != NULL)
     {
-        if (copy_from_user(bufferptr, buf, count) > 0)
+        memcpy(bufferptr, aesd_dev_ptr->staging_entry.buffptr, aesd_dev_ptr->staging_entry.size);
+        if (copy_from_user((bufferptr + aesd_dev_ptr->staging_entry.size), buf, count) > 0)
         {
             PDEBUG("Error in copy from user\n");
             retval = -EFAULT;
@@ -110,11 +111,15 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count, loff
         else
         {
             mutex_lock(&aesd_dev_ptr->lock);
-            entry.buffptr = bufferptr;
-            entry.size = count;
-            bufferptr = (char*) aesd_circular_buffer_add_entry(&aesd_dev_ptr->circular_buffer, &entry);
+            aesd_dev_ptr->staging_entry.buffptr = bufferptr;
+            aesd_dev_ptr->staging_entry.size += count;
+            if (aesd_dev_ptr->staging_entry.buffptr[aesd_dev_ptr->staging_entry.size - 1] == '\n')
+            {
+                bufferptr = (char*) aesd_circular_buffer_add_entry(&aesd_dev_ptr->circular_buffer, &(aesd_dev_ptr->staging_entry));
+                kfree(bufferptr);
+                memset(&(aesd_dev_ptr->staging_entry), 0x00, sizeof(aesd_dev_ptr->staging_entry));
+            }
             mutex_unlock(&aesd_dev_ptr->lock);
-            kfree(bufferptr);
             retval = count;
         }
     }
@@ -145,7 +150,7 @@ static int aesd_setup_cdev(struct aesd_dev *dev)
 
 
 
-int aesd_init_module(void)
+int __init aesd_init_module(void)
 {
     PDEBUG("%s\n", __func__);
 
@@ -173,7 +178,7 @@ int aesd_init_module(void)
     return result;
 }
 
-void aesd_cleanup_module(void)
+void __exit aesd_cleanup_module(void)
 {
     PDEBUG("%s\n", __func__);
 

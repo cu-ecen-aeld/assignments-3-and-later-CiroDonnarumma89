@@ -33,6 +33,7 @@
 struct aesd_dev
 {
     struct aesd_circular_buffer circular_buffer;
+    struct aesd_buffer_entry    staging_entry;
     struct mutex                lock;
     struct cdev                 cdev;
 };
