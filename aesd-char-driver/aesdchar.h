@@ -10,6 +10,11 @@
 
 #include "aesd-circular-buffer.h"
 
+#ifdef __KERNEL__
+#include <linux/mutex.h>
+#endif
+
+
 #define AESD_DEBUG 1
 
 #undef PDEBUG             /* undef it, just in case */
@@ -27,11 +32,9 @@
 
 struct aesd_dev
 {
-    /**
-     * TODO: Add structure(s) and locks needed to complete assignment requirements
-     */
     struct aesd_circular_buffer circular_buffer;
-    struct cdev cdev;     /* Char device structure      */
+    struct mutex                lock;
+    struct cdev                 cdev;
 };
 
 
