@@ -26,17 +26,20 @@ typedef struct connection_ctx_t
 typedef struct connection_manager_t {
     char*                                                    filename;
     pthread_mutex_t                                          file_mutex;
+    #ifndef USE_AESD_CHAR_DEVICE
     timer_t                                                  timerid;
+    #endif
     bool                                                     close_connections;
     SLIST_HEAD(connection_ctx_list_head_t, connection_ctx_t) connection_ctx_list;
 } connection_manager_t;
 
 
-
 static void*    thread_routine(void * connection_ctx);
-static void     thread_timer(union sigval sigval);
 static void     save_message(char* message, const char* filename);
 
+#ifndef USE_AESD_CHAR_DEVICE
+static void     thread_timer(union sigval sigval);
+#endif
 
 
 connection_manager_t* connection_manager_create(const char* filename)
@@ -48,6 +51,7 @@ connection_manager_t* connection_manager_create(const char* filename)
     manager->close_connections = false;
     SLIST_INIT(&manager->connection_ctx_list);
 
+    #ifndef USE_AESD_CHAR_DEVICE
     struct sigevent sev;
     memset(&sev, 0, sizeof(sev));
     sev.sigev_notify = SIGEV_THREAD;
@@ -69,6 +73,7 @@ connection_manager_t* connection_manager_create(const char* filename)
     its.it_interval.tv_sec = 10;
     its.it_interval.tv_nsec = 0;
     timer_settime(timerid, 0, &its, NULL);
+    #endif
 
 
     return manager;
@@ -90,7 +95,9 @@ void connection_manager_destroy(connection_manager_t* manager)
             connection_ctx = NULL;
         }
         pthread_mutex_destroy(&manager->file_mutex);
+        #ifndef USE_AESD_CHAR_DEVICE
         timer_delete(manager->timerid);
+        #endif
         free(manager->filename);
         free(manager);
     }
@@ -138,6 +145,7 @@ static void* thread_routine(void * connection_ctx)
     return 0;
 }
 
+#ifndef USE_AESD_CHAR_DEVICE
 static void thread_timer(union sigval sigval)
 {
     connection_manager_t* manager = (connection_manager_t*)sigval.sival_ptr;
@@ -166,6 +174,7 @@ static void thread_timer(union sigval sigval)
     fclose(fd);
     pthread_mutex_unlock(&manager->file_mutex);
 }
+#endif
 
 
 

@@ -19,10 +19,15 @@
 #include "connection_manager.h"
 #include "tcp_server.h"
 
+#ifdef USE_AESD_CHAR_DEVICE
+#define TARGET_FILENAME "/dev/aesdchar"
+#else
+#define TARGET_FILENAME "/var/tmp/aesdsocketdata"
+#endif
 
 // Global variables
 
-const char*             filename            = "/var/tmp/aesdsocketdata";    /*!< file to save the messages */
+const char*             filename            = TARGET_FILENAME;              /*!< file to save the messages */
 bool                    exit_program        = false;                        /*!< flag to exit the program */
 connection_manager_t*   connection_manager  = NULL;                         /*!< connection manager */
 // Data structures
@@ -151,11 +156,13 @@ static void setup(void)
 
 static void teardown(void)
 {
+    #ifndef USE_AESD_CHAR_DEVICE
     if (remove(filename) == 0) {
         printf("%s deleted successfully.\n", filename);
     } else {
         printf("Error: Unable to delete %s.\n", filename);
     }
+    #endif
     closelog();
 }
 
