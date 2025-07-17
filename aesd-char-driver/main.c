@@ -17,27 +17,34 @@
 #include <linux/types.h>
 #include <linux/cdev.h>
 #include <linux/fs.h> // file_operations
+#include <linux/uaccess.h>	/* copy_*_user */
 #include "aesdchar.h"
 int aesd_major =   0; // use dynamic major
 int aesd_minor =   0;
 
-MODULE_AUTHOR("Your Name Here"); /** TODO: fill in your name **/
+MODULE_AUTHOR("Ciro Donnarumma");
 MODULE_LICENSE("Dual BSD/GPL");
 
 struct aesd_dev aesd_device;
 
+int     aesd_open(struct inode *inode, struct file *filp);
+int     aesd_release(struct inode *inode, struct file *filp);
+ssize_t aesd_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos);
+ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count, loff_t *f_pos);
+int     aesd_init_module(void);
+void    aesd_cleanup_module(void);
+
+
 int aesd_open(struct inode *inode, struct file *filp)
 {
-    PDEBUG("open");
-    /**
-     * TODO: handle open
-     */
+    PDEBUG("%s\n", __func__);
+    filp->private_data = &aesd_device;
     return 0;
 }
 
 int aesd_release(struct inode *inode, struct file *filp)
 {
-    PDEBUG("release");
+    PDEBUG("%s\n", __func__);
     /**
      * TODO: handle release
      */
@@ -48,10 +55,35 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
                 loff_t *f_pos)
 {
     ssize_t retval = 0;
-    PDEBUG("read %zu bytes with offset %lld",count,*f_pos);
-    /**
-     * TODO: handle read
-     */
+    struct aesd_dev* aesd_dev_ptr = (struct aesd_dev*)filp->private_data;
+
+
+    PDEBUG("read %zu bytes with offset %lld\n",count,*f_pos);
+
+    struct aesd_buffer_entry*   buffer_entry_ptr = NULL;
+    size_t                      buffer_entry_off = 0;
+
+    PDEBUG("Lookiong for offset %lld\n", *f_pos);
+    buffer_entry_ptr = aesd_circular_buffer_find_entry_offset_for_fpos(
+        &aesd_dev_ptr->circular_buffer,
+        *f_pos,
+        &buffer_entry_off);
+
+    if (buffer_entry_ptr != NULL)
+    {
+        retval = buffer_entry_ptr->size - buffer_entry_off;
+        PDEBUG("Entry with offset %llu has been found. It's size is %zu. Reading %zu bytes\n", *f_pos, buffer_entry_ptr->size, retval);
+        copy_to_user(buf, buffer_entry_ptr->buffptr, retval);
+    }
+    else
+    {
+        PDEBUG("No entry with offset %lld.\n", *f_pos);
+    }
+
+    *f_pos += retval;
+
+    PDEBUG("Read returning %zu. New fpos %lld.\n", retval, *f_pos);
+
     return retval;
 }
 
@@ -59,10 +91,26 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
                 loff_t *f_pos)
 {
     ssize_t retval = -ENOMEM;
-    PDEBUG("write %zu bytes with offset %lld",count,*f_pos);
-    /**
-     * TODO: handle write
-     */
+    struct aesd_buffer_entry entry;
+    char* bufferptr = NULL;
+    struct aesd_dev* aesd_dev_ptr = (struct aesd_dev*)filp->private_data;
+
+
+    PDEBUG("write %zu bytes with offset %lld\n",count,*f_pos);
+
+    bufferptr = kmalloc(count, GFP_KERNEL);
+    copy_from_user(bufferptr, buf, count);
+    entry.buffptr = bufferptr;
+    entry.size = count;
+    bufferptr = (char*) aesd_circular_buffer_add_entry(&aesd_dev_ptr->circular_buffer, &entry);
+    PDEBUG("circular_buffer->in_off = %zu; circular_buffer->out_off = %zu", aesd_dev_ptr->circular_buffer.in_offs, aesd_dev_ptr->circular_buffer.out_offs);
+
+    if (bufferptr)
+    {
+        kfree(bufferptr);
+    }
+
+    retval = count;
     return retval;
 }
 struct file_operations aesd_fops = {
@@ -82,7 +130,7 @@ static int aesd_setup_cdev(struct aesd_dev *dev)
     dev->cdev.ops = &aesd_fops;
     err = cdev_add (&dev->cdev, devno, 1);
     if (err) {
-        printk(KERN_ERR "Error %d adding aesd cdev", err);
+        printk(KERN_ERR "Error %d adding aesd cdev\n", err);
     }
     return err;
 }
@@ -91,6 +139,8 @@ static int aesd_setup_cdev(struct aesd_dev *dev)
 
 int aesd_init_module(void)
 {
+    PDEBUG("%s\n", __func__);
+
     dev_t dev = 0;
     int result;
     result = alloc_chrdev_region(&dev, aesd_minor, 1,
@@ -102,9 +152,7 @@ int aesd_init_module(void)
     }
     memset(&aesd_device,0,sizeof(struct aesd_dev));
 
-    /**
-     * TODO: initialize the AESD specific portion of the device
-     */
+    aesd_circular_buffer_init(&aesd_device.circular_buffer);
 
     result = aesd_setup_cdev(&aesd_device);
 
@@ -117,13 +165,17 @@ int aesd_init_module(void)
 
 void aesd_cleanup_module(void)
 {
+    PDEBUG("%s\n", __func__);
+
     dev_t devno = MKDEV(aesd_major, aesd_minor);
 
     cdev_del(&aesd_device.cdev);
 
-    /**
-     * TODO: cleanup AESD specific poritions here as necessary
-     */
+    uint8_t index = 0;
+    struct aesd_buffer_entry *entry = NULL;
+    AESD_CIRCULAR_BUFFER_FOREACH(entry, &aesd_device.circular_buffer, index) {
+        kfree(entry->buffptr);
+    }
 
     unregister_chrdev_region(devno, 1);
 }
