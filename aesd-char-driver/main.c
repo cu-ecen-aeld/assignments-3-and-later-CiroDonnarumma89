@@ -25,6 +25,11 @@ int aesd_minor =   0;
 MODULE_AUTHOR("Ciro Donnarumma");
 MODULE_LICENSE("Dual BSD/GPL");
 
+#ifdef MIN
+#undef MIN
+#endif
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+
 struct aesd_dev aesd_device;
 
 int     aesd_open(struct inode *inode, struct file *filp);
@@ -52,7 +57,8 @@ int aesd_release(struct inode *inode, struct file *filp)
 
     mutex_lock(&(aesd_dev_ptr->lock));
     kfree(aesd_dev_ptr->staging_entry.buffptr);
-    memset(&(aesd_dev_ptr->staging_entry), 0x00, sizeof(aesd_dev_ptr->staging_entry));
+    aesd_dev_ptr->staging_entry.buffptr = NULL;
+    aesd_dev_ptr->staging_entry.size = 0;
     mutex_unlock(&aesd_dev_ptr->lock);
 
     return 0;
@@ -74,10 +80,10 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count, loff_t *f_p
     buffer_entry_ptr = aesd_circular_buffer_find_entry_offset_for_fpos(&aesd_dev_ptr->circular_buffer, *f_pos, &buffer_entry_off);
     if (buffer_entry_ptr != NULL)
     {
-        retval = buffer_entry_ptr->size - buffer_entry_off;
+        retval = MIN(count, buffer_entry_ptr->size - buffer_entry_off);
         if(copy_to_user(buf, buffer_entry_ptr->buffptr, retval) > 0)
         {
-            PDEBUG("Error in copy to user\n");
+            PDEBUG("Error in copy to user");
             retval = -EFAULT;
         }
     }
@@ -106,7 +112,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count, loff
 
     mutex_lock(&aesd_dev_ptr->lock);
 
-    bufferptr    = kmalloc((count + aesd_dev_ptr->staging_entry.size), GFP_KERNEL);
+    bufferptr = kmalloc((count + aesd_dev_ptr->staging_entry.size), GFP_KERNEL);
 
     if (bufferptr != NULL)
     {
@@ -114,14 +120,17 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count, loff
         if (copy_from_user((bufferptr + aesd_dev_ptr->staging_entry.size), buf, count) > 0)
         {
             PDEBUG("Error in copy from user\n");
+            kfree(bufferptr);
             retval = -EFAULT;
         }
         else
         {
+            kfree(aesd_dev_ptr->staging_entry.buffptr);
             aesd_dev_ptr->staging_entry.buffptr = bufferptr;
             aesd_dev_ptr->staging_entry.size += count;
             if (aesd_dev_ptr->staging_entry.buffptr[aesd_dev_ptr->staging_entry.size - 1] == '\n')
             {
+                PDEBUG("Enqueuing %zu bytes.", aesd_dev_ptr->staging_entry.size);
                 bufferptr = (char*) aesd_circular_buffer_add_entry(&aesd_dev_ptr->circular_buffer, &(aesd_dev_ptr->staging_entry));
                 kfree(bufferptr);
                 memset(&(aesd_dev_ptr->staging_entry), 0x00, sizeof(aesd_dev_ptr->staging_entry));
