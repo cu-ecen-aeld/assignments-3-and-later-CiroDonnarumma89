@@ -49,7 +49,12 @@ int aesd_release(struct inode *inode, struct file *filp)
     PDEBUG("%s\n", __func__);
 
     aesd_dev_ptr = (struct aesd_dev*)(filp->private_data);
+
+    mutex_lock(&(aesd_dev_ptr->lock));
     kfree(aesd_dev_ptr->staging_entry.buffptr);
+    memset(&(aesd_dev_ptr->staging_entry), 0x00, sizeof(aesd_dev_ptr->staging_entry));
+    mutex_unlock(&aesd_dev_ptr->lock);
+
     return 0;
 }
 
@@ -98,6 +103,9 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count, loff
     PDEBUG("write %zu bytes with offset %lld\n",count,*f_pos);
 
     aesd_dev_ptr = (struct aesd_dev*)filp->private_data;
+
+    mutex_lock(&aesd_dev_ptr->lock);
+
     bufferptr    = kmalloc((count + aesd_dev_ptr->staging_entry.size), GFP_KERNEL);
 
     if (bufferptr != NULL)
@@ -110,7 +118,6 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count, loff
         }
         else
         {
-            mutex_lock(&aesd_dev_ptr->lock);
             aesd_dev_ptr->staging_entry.buffptr = bufferptr;
             aesd_dev_ptr->staging_entry.size += count;
             if (aesd_dev_ptr->staging_entry.buffptr[aesd_dev_ptr->staging_entry.size - 1] == '\n')
@@ -119,10 +126,11 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count, loff
                 kfree(bufferptr);
                 memset(&(aesd_dev_ptr->staging_entry), 0x00, sizeof(aesd_dev_ptr->staging_entry));
             }
-            mutex_unlock(&aesd_dev_ptr->lock);
             retval = count;
         }
     }
+
+    mutex_unlock(&aesd_dev_ptr->lock);
 
     return retval;
 }
