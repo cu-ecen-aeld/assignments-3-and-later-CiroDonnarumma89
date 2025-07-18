@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include <pthread.h>
+#include <assert.h>
 
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -65,7 +66,7 @@ int main(int argc, char const *argv[])
     }
 
     connection_manager = connection_manager_create(filename);
-    // TODO: Check connection manager creation
+    assert(connection_manager);
 
     tcp_server_handle_t* server = tcp_server_create("9000");
 
@@ -79,6 +80,7 @@ int main(int argc, char const *argv[])
     {
         syslog(LOG_ERR, "Failed to listen");
         tcp_server_destroy(server);
+        server = NULL;
         exit(-1);
     }
 
@@ -97,6 +99,8 @@ int main(int argc, char const *argv[])
 
     printf("Caught signal, exiting\n");
     tcp_server_destroy(server);
+    connection_manager_destroy(connection_manager);
+    connection_manager = NULL;
     teardown();
 
 

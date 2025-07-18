@@ -99,6 +99,7 @@ void connection_manager_destroy(connection_manager_t* manager)
         timer_delete(manager->timerid);
         #endif
         free(manager->filename);
+        manager->filename = NULL;
         free(manager);
     }
 }
@@ -136,6 +137,7 @@ static void* thread_routine(void * connection_ctx)
             tcp_connection_send_file(connection, ((connection_ctx_t*)connection_ctx)->manager->filename);
             pthread_mutex_unlock(&((connection_ctx_t*)connection_ctx)->manager->file_mutex);
             free(message);
+            message = NULL;
         }
     }
     printf("Closed connection from %s\n", ((connection_ctx_t*)connection_ctx)->connection->client_address);

@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdio.h>
+#include <assert.h>
 #include <sys/socket.h>
 #include "tcp_connection.h"
 
@@ -20,6 +21,7 @@ tcp_connection_t* tcp_connection_create(int socket, const char* client_address)
     if (connection->client_address == NULL)
     {
         free(connection);
+        connection = NULL;
         return NULL;
     }
 
@@ -34,6 +36,7 @@ void tcp_connection_destroy(tcp_connection_t* connection)
     {
         close(connection->socket);
         free((void*)connection->client_address);
+        connection->client_address = NULL;
         free(connection);
     }
 }
@@ -46,11 +49,15 @@ bool tcp_connection_is_open(const tcp_connection_t* connection)
 
 bool tcp_connection_receive_message(tcp_connection_t* connection, char** message, char delimiter)
 {
+    assert(connection);
+    assert(message);
+
     int   buffer_size = 1024;
     char* buffer = (char*)malloc(buffer_size);
+    assert(buffer);
 
     int   current_size = 0;
-    char* new_line_ptr;
+    char* new_line_ptr = NULL;
 
     int   recv_size;
 
@@ -71,6 +78,7 @@ bool tcp_connection_receive_message(tcp_connection_t* connection, char** message
                 {
                     buffer_size *= 2;
                     buffer = (char*)realloc(buffer, buffer_size);
+                    assert(buffer);
                 }
             }
         }
@@ -79,12 +87,14 @@ bool tcp_connection_receive_message(tcp_connection_t* connection, char** message
             *message = NULL;
             connection->is_open = false;
             free(buffer);
+            buffer = NULL;
             return false;
         }
         else
         {
             *message = NULL;
             free(buffer);
+            buffer = NULL;
             perror("recv");
             return false;
         }
@@ -124,6 +134,8 @@ bool tcp_connection_send_file(tcp_connection_t* connection, const char* filename
             return false;
         }
     }
+
+    fclose(fd);
 
     return true;
 }
