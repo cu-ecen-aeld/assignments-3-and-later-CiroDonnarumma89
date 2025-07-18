@@ -88,12 +88,17 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count, loff_t *f_p
         }
     }
 
-    mutex_unlock(&aesd_dev_ptr->lock);
 
     if (retval > 0)
     {
         *f_pos += retval;
     }
+    else
+    {
+        PDEBUG("Reached EOF");
+    }
+
+    mutex_unlock(&aesd_dev_ptr->lock);
 
     PDEBUG("Read returning %zu. New fpos %lld.\n", retval, *f_pos);
 
