@@ -49,17 +49,7 @@ int aesd_open(struct inode *inode, struct file *filp)
 
 int aesd_release(struct inode *inode, struct file *filp)
 {
-    struct aesd_dev* aesd_dev_ptr = NULL;
-
     PDEBUG("%s\n", __func__);
-
-    aesd_dev_ptr = (struct aesd_dev*)(filp->private_data);
-
-    mutex_lock(&(aesd_dev_ptr->lock));
-    kfree(aesd_dev_ptr->staging_entry.buffptr);
-    aesd_dev_ptr->staging_entry.buffptr = NULL;
-    aesd_dev_ptr->staging_entry.size = 0;
-    mutex_unlock(&aesd_dev_ptr->lock);
 
     return 0;
 }

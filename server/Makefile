@@ -2,6 +2,7 @@ COMPILER=$(CROSS_COMPILE)$(CC)
 
 CFLAGS += -O0
 CFLAGS += -g3
+CFLAGS += -DUSE_AESD_CHAR_DEVICE
 
 all: aesdsocket
 

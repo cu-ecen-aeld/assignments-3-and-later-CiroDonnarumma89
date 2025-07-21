@@ -105,7 +105,7 @@ bool tcp_connection_receive_message(tcp_connection_t* connection, char** message
 
 bool tcp_connection_send_message(tcp_connection_t* connection, const char* message, ssize_t size)
 {
-    ssize_t ret = send(connection->socket, message, strlen(message), 0);
+    ssize_t ret = send(connection->socket, message, size, 0);
     if (ret == -1)
     {
         perror("send");
@@ -119,23 +119,24 @@ bool tcp_connection_send_message(tcp_connection_t* connection, const char* messa
 
 bool tcp_connection_send_file(tcp_connection_t* connection, const char* filename)
 {
-    FILE* fd = fopen(filename, "r");
+    const unsigned int buffer_size = 4096;
+    char  buffer[buffer_size];
+    ssize_t  bytes_read;
+    FILE*   fd = fopen(filename, "r");
+
     if (fd == NULL)
     {
         perror(filename);
         return false;
     }
 
-    char line[256];
-    while (fgets(line, sizeof(line), fd))
-    {
-        if (false == tcp_connection_send_message(connection, line, strlen(line)))
+    while ((bytes_read = read(fd->_fileno, buffer, buffer_size)) > 0) {
+        if (false == tcp_connection_send_message(connection, buffer, bytes_read))
         {
             return false;
         }
     }
 
     fclose(fd);
-
     return true;
 }
