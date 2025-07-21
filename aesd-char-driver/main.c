@@ -81,7 +81,7 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count, loff_t *f_p
     if (buffer_entry_ptr != NULL)
     {
         retval = MIN(count, buffer_entry_ptr->size - buffer_entry_off);
-        if(copy_to_user(buf, buffer_entry_ptr->buffptr, retval) > 0)
+        if(copy_to_user(buf, buffer_entry_ptr->buffptr + buffer_entry_off, retval) > 0)
         {
             PDEBUG("Error in copy to user");
             retval = -EFAULT;
