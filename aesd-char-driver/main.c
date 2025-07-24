@@ -12,7 +12,7 @@
  */
 
 #include <linux/module.h>
-#include <linux/slab.h>:
+#include <linux/slab.h>
 #include <linux/init.h>
 #include <linux/printk.h>
 #include <linux/types.h>
@@ -35,6 +35,7 @@ struct aesd_dev aesd_device;
 
 int     aesd_open(struct inode *inode, struct file *filp);
 int     aesd_release(struct inode *inode, struct file *filp);
+loff_t  aesd_llseek(struct file *, loff_t, int);
 ssize_t aesd_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos);
 ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count, loff_t *f_pos);
 int     aesd_init_module(void);
@@ -43,17 +44,31 @@ void    aesd_cleanup_module(void);
 
 int aesd_open(struct inode *inode, struct file *filp)
 {
-    PDEBUG("%s\n", __func__);
     filp->private_data = &aesd_device;
     return 0;
 }
 
 int aesd_release(struct inode *inode, struct file *filp)
 {
-    PDEBUG("%s\n", __func__);
-
     return 0;
 }
+
+loff_t aesd_llseek(struct file *filp, loff_t off, int whence)
+{
+    loff_t           retval       = -EINVAL;
+    struct aesd_dev* aesd_dev_ptr = NULL;
+
+    aesd_dev_ptr = (struct aesd_dev*)(filp->private_data);
+
+    PDEBUG("aesd_llseek: off = %llu, whence = %d", off, whence);
+
+    mutex_lock(&aesd_dev_ptr->lock);
+    retval = fixed_size_llseek(filp, off, whence, aesd_circular_buffer_size(&aesd_dev_ptr->circular_buffer));
+    mutex_unlock(&aesd_dev_ptr->lock);
+
+    return retval;
+}
+
 
 ssize_t aesd_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos)
 {
@@ -84,14 +99,8 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count, loff_t *f_p
     {
         *f_pos += retval;
     }
-    else
-    {
-        PDEBUG("Reached EOF");
-    }
 
     mutex_unlock(&aesd_dev_ptr->lock);
-
-    PDEBUG("Read returning %zu. New fpos %lld.\n", retval, *f_pos);
 
     return retval;
 }
@@ -126,7 +135,6 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count, loff
             aesd_dev_ptr->staging_entry.size += count;
             if (aesd_dev_ptr->staging_entry.buffptr[aesd_dev_ptr->staging_entry.size - 1] == '\n')
             {
-                PDEBUG("Enqueuing %zu bytes.", aesd_dev_ptr->staging_entry.size);
                 bufferptr = (char*) aesd_circular_buffer_add_entry(&aesd_dev_ptr->circular_buffer, &(aesd_dev_ptr->staging_entry));
                 kfree(bufferptr);
                 memset(&(aesd_dev_ptr->staging_entry), 0x00, sizeof(aesd_dev_ptr->staging_entry));
@@ -141,6 +149,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count, loff
 }
 struct file_operations aesd_fops = {
     .owner =    THIS_MODULE,
+    .llseek =   aesd_llseek,
     .read =     aesd_read,
     .write =    aesd_write,
     .open =     aesd_open,

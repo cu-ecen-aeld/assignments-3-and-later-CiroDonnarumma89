@@ -49,6 +49,10 @@ struct aesd_circular_buffer
      * set to true when the buffer entry structure is full
      */
     bool full;
+    /**
+     * Total number of bytes stored in the buffer
+     */
+    size_t size;
 };
 
 extern struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct aesd_circular_buffer *buffer,
@@ -77,6 +81,7 @@ extern void aesd_circular_buffer_init(struct aesd_circular_buffer *buffer);
             index<AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED; \
             index++, entryptr=&((buffer)->entry[index]))
 
+#define aesd_circular_buffer_size(buffer) ((buffer)->size)
 
 
 #endif /* AESD_CIRCULAR_BUFFER_H */
