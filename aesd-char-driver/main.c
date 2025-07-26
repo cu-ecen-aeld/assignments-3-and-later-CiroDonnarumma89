@@ -20,6 +20,8 @@
 #include <linux/fs.h> // file_operations
 #include <linux/uaccess.h>	/* copy_*_user */
 #include "aesdchar.h"
+#include "aesd_ioctl.h"
+
 int aesd_major =   0; // use dynamic major
 int aesd_minor =   0;
 
@@ -38,6 +40,7 @@ int     aesd_release(struct inode *inode, struct file *filp);
 loff_t  aesd_llseek(struct file *, loff_t, int);
 ssize_t aesd_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos);
 ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count, loff_t *f_pos);
+long    aesd_ioctl(struct file * filp, unsigned int cmd, unsigned long arg);
 int     aesd_init_module(void);
 void    aesd_cleanup_module(void);
 
@@ -147,14 +150,58 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count, loff
 
     return retval;
 }
+
+
+/**
+ * Asdjust the file offset (f_pos) parameter of @param filp based on the location specified by
+ * @param write_cmd (the zero referenced command to locate)
+ * and @param write_cmd_offset (the zero referenced offset into the command)
+ * @return 0 if successful, negative if error occurred:
+ *      -ERESTARTSYS if mutex could not be obtained
+ *      -EINVAL if write_command or write_cmd_offset wasout of range
+ */
+static long aesd_adjust_file_offset(struct file *filp, unsigned int write_cmd, unsigned int write_cmd_offset)
+{
+    PDEBUG("adjust_file_offset to cmd %d with offset %d", write_cmd, write_cmd_offset);
+    return -EINVAL;
+}
+
+long aesd_ioctl(struct file * filp, unsigned int cmd, unsigned long arg)
+{
+    long retval = -EINVAL;
+
+    switch (cmd)
+    {
+    case AESDCHAR_IOCSEEKTO:
+        struct aesd_seekto seekto;
+        if (copy_from_user(&seekto, (const void __user*)arg, sizeof(seekto)) != 0)
+        {
+            retval = -EFAULT;
+        }
+        else
+        {
+            retval = aesd_adjust_file_offset(filp, seekto.write_cmd, seekto.write_cmd_offset);
+        }
+        break;
+    default:
+        retval = -EINVAL;
+        break;
+    }
+
+    return retval;
+}
+
+
 struct file_operations aesd_fops = {
-    .owner =    THIS_MODULE,
-    .llseek =   aesd_llseek,
-    .read =     aesd_read,
-    .write =    aesd_write,
-    .open =     aesd_open,
-    .release =  aesd_release,
+    .owner =            THIS_MODULE,
+    .llseek =           aesd_llseek,
+    .read =             aesd_read,
+    .write =            aesd_write,
+    .unlocked_ioctl =   aesd_ioctl,
+    .open =             aesd_open,
+    .release =          aesd_release,
 };
+
 
 static int aesd_setup_cdev(struct aesd_dev *dev)
 {
