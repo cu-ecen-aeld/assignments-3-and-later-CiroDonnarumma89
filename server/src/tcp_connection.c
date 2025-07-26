@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
-#include <stdio.h>
 #include <assert.h>
 #include <sys/socket.h>
 #include "tcp_connection.h"
@@ -117,18 +116,12 @@ bool tcp_connection_send_message(tcp_connection_t* connection, const char* messa
     }
 }
 
-bool tcp_connection_send_file(tcp_connection_t* connection, const char* filename)
+bool tcp_connection_send_file(tcp_connection_t* connection, FILE* fd)
 {
     const unsigned int buffer_size = 4096;
     char  buffer[buffer_size];
     ssize_t  bytes_read;
-    FILE*   fd = fopen(filename, "r");
 
-    if (fd == NULL)
-    {
-        perror(filename);
-        return false;
-    }
 
     while ((bytes_read = read(fd->_fileno, buffer, buffer_size)) > 0) {
         if (false == tcp_connection_send_message(connection, buffer, bytes_read))
@@ -137,6 +130,5 @@ bool tcp_connection_send_file(tcp_connection_t* connection, const char* filename
         }
     }
 
-    fclose(fd);
     return true;
 }

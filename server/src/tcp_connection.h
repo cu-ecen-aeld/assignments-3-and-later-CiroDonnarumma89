@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdio.h>
 #include <stdbool.h>
 #include <sys/types.h>
 
@@ -57,7 +58,7 @@ bool tcp_connection_send_message(tcp_connection_t* connection, const char* messa
  * @return: true if the file was sent successfully, false otherwise
  * @error: return false in case of error
  */
-bool tcp_connection_send_file(tcp_connection_t* connection, const char* filename);
+bool tcp_connection_send_file(tcp_connection_t* connection, FILE* fd);
 
 
 /***

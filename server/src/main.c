@@ -40,7 +40,6 @@ static bool daemonize(void);
 static void setup(void);
 static void teardown(void);
 static void signal_handler(int signal_number);
-static void save_message(char* message, const char* filename);
 
 /***
  * Main function
@@ -175,18 +174,4 @@ static void signal_handler(int signal_number)
 {
     syslog(LOG_DEBUG, "Caught signal, exiting");
     exit_program = true;
-}
-
-static void save_message(char* message, const char* filename)
-{
-    FILE* fd = fopen(filename, "a");
-    if (fd == NULL)
-    {
-        perror(filename);
-        syslog(LOG_ERR, "Unable to create or open file: %s", filename);
-        exit(-1);
-    }
-
-    fprintf(fd, "%s\n", message);
-    fclose(fd);
 }

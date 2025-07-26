@@ -5,7 +5,9 @@
 #include <string.h>
 #include <signal.h>
 #include <time.h>
+#include <unistd.h>
 #include "queue.h" // Queue taken from FreeBSD10
+#include "aesd_ioctl.h"
 
 #include "connection_manager.h"
 
@@ -35,7 +37,6 @@ typedef struct connection_manager_t {
 
 
 static void*    thread_routine(void * connection_ctx);
-static void     save_message(char* message, const char* filename);
 
 #ifndef USE_AESD_CHAR_DEVICE
 static void     thread_timer(union sigval sigval);
@@ -123,8 +124,52 @@ bool connection_manager_register_connection(connection_manager_t* manager, tcp_c
     }
 }
 
+static bool decode_ioctl_command(const char* message, struct aesd_seekto* aesd_seekto)
+{
+    const char* prefix = "AESDCHAR_IOCSEEKTO:";
+
+    if (0 == strncmp(message, prefix, strlen(prefix)))
+    {
+        if (sscanf(message + strlen(prefix), "%u,%u", &aesd_seekto->write_cmd, &aesd_seekto->write_cmd_offset) == 2)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+int handle_message(FILE* fd, const char* message)
+{
+    int retval;
+    struct aesd_seekto seekto;
+
+    if (decode_ioctl_command(message, &seekto))
+    {
+        retval = ioctl(fileno(fd), AESDCHAR_IOCSEEKTO, &seekto);
+        if (retval < 0)
+        {
+            perror("ioctl");
+        }
+    }
+    else
+    {
+        retval = fprintf(fd, "%s\n", message);
+        fflush(fd);
+    }
+
+    if (retval < 0)
+    {
+        syslog(LOG_ERR, "Reval: %d", retval);
+    }
+
+    return retval;
+}
+
+
 static void* thread_routine(void * connection_ctx)
 {
+    FILE* fd = NULL;
     char* message = NULL;
     tcp_connection_t* connection = ((connection_ctx_t*)connection_ctx)->connection;
 
@@ -132,12 +177,28 @@ static void* thread_routine(void * connection_ctx)
     {
         if (tcp_connection_receive_message(connection, &message, '\n'))
         {
+            fd = fopen(((connection_ctx_t*)connection_ctx)->manager->filename, "r+");
+
+            if (fd == NULL)
+            {
+                perror(((connection_ctx_t*)connection_ctx)->manager->filename);
+                syslog(LOG_ERR, "Unable to create or open file: %s", ((connection_ctx_t*)connection_ctx)->manager->filename);
+                continue;
+            }
+
             pthread_mutex_lock(&((connection_ctx_t*)connection_ctx)->manager->file_mutex);
-            save_message(message, ((connection_ctx_t*)connection_ctx)->manager->filename);
-            tcp_connection_send_file(connection, ((connection_ctx_t*)connection_ctx)->manager->filename);
+            if (handle_message(fd, message) >= 0)
+            {
+                tcp_connection_send_file(connection, fd);
+            }
+            else
+            {
+                syslog(LOG_ERR, "Unable to handle the input message");
+            }
             pthread_mutex_unlock(&((connection_ctx_t*)connection_ctx)->manager->file_mutex);
             free(message);
             message = NULL;
+            fclose(fd);
         }
     }
     printf("Closed connection from %s\n", ((connection_ctx_t*)connection_ctx)->connection->client_address);
@@ -177,19 +238,3 @@ static void thread_timer(union sigval sigval)
     pthread_mutex_unlock(&manager->file_mutex);
 }
 #endif
-
-
-
-static void save_message(char* message, const char* filename)
-{
-    FILE* fd = fopen(filename, "a");
-    if (fd == NULL)
-    {
-        perror(filename);
-        syslog(LOG_ERR, "Unable to create or open file: %s", filename);
-        exit(-1);
-    }
-
-    fprintf(fd, "%s\n", message);
-    fclose(fd);
-}
