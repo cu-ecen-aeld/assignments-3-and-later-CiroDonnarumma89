@@ -46,19 +46,22 @@ struct aesd_circular_buffer
      */
     uint8_t out_offs;
     /**
-     * set to true when the buffer entry structure is full
+     * Total number of entries in the buffer
      */
-    bool full;
+    uint8_t num_entries;
     /**
      * Total number of bytes stored in the buffer
      */
     size_t size;
 };
 
+extern int aesd_circular_buffer_get_entry_fpos(struct aesd_circular_buffer *buffer, unsigned int index, size_t offset);
+
 extern struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct aesd_circular_buffer *buffer,
             size_t char_offset, size_t *entry_offset_byte_rtn );
 
 extern const char *aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const struct aesd_buffer_entry *add_entry);
+
 
 extern void aesd_circular_buffer_init(struct aesd_circular_buffer *buffer);
 
@@ -81,7 +84,9 @@ extern void aesd_circular_buffer_init(struct aesd_circular_buffer *buffer);
             index<AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED; \
             index++, entryptr=&((buffer)->entry[index]))
 
-#define aesd_circular_buffer_size(buffer) ((buffer)->size)
+#define aesd_circular_buffer_empty(buffer) (((buffer)->num_entries) == 0)
+#define aesd_circular_buffer_full(buffer)  (((buffer)->num_entries) == AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED)
+#define aesd_circular_buffer_size(buffer)  ((buffer)->size)
 
 
 #endif /* AESD_CIRCULAR_BUFFER_H */

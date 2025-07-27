@@ -158,12 +158,29 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count, loff
  * and @param write_cmd_offset (the zero referenced offset into the command)
  * @return 0 if successful, negative if error occurred:
  *      -ERESTARTSYS if mutex could not be obtained
- *      -EINVAL if write_command or write_cmd_offset wasout of range
+ *      -EINVAL if write_command or write_cmd_offset was out of range
  */
 static long aesd_adjust_file_offset(struct file *filp, unsigned int write_cmd, unsigned int write_cmd_offset)
 {
-    PDEBUG("adjust_file_offset to cmd %d with offset %d", write_cmd, write_cmd_offset);
-    return -EINVAL;
+    long retval                   = -EINVAL;
+    loff_t new_fpos               = -1;
+    struct aesd_dev* aesd_dev_ptr = (struct aesd_dev*)filp->private_data;
+
+    PDEBUG("Seeking at command %d with offset %d", write_cmd, write_cmd_offset);
+
+    mutex_lock(&aesd_dev_ptr->lock);
+
+    new_fpos = aesd_circular_buffer_get_entry_fpos(&aesd_dev_ptr->circular_buffer, write_cmd, write_cmd_offset);
+
+    if (new_fpos >= 0)
+    {
+        filp->f_pos = new_fpos;
+        retval = 0;
+    }
+
+    mutex_unlock(&aesd_dev_ptr->lock);
+
+    return retval;
 }
 
 long aesd_ioctl(struct file * filp, unsigned int cmd, unsigned long arg)
@@ -177,6 +194,8 @@ long aesd_ioctl(struct file * filp, unsigned int cmd, unsigned long arg)
         if (copy_from_user(&seekto, (const void __user*)arg, sizeof(seekto)) != 0)
         {
             retval = -EFAULT;
+            PDEBUG("Error in copying from userspace");
+
         }
         else
         {
@@ -184,7 +203,8 @@ long aesd_ioctl(struct file * filp, unsigned int cmd, unsigned long arg)
         }
         break;
     default:
-        retval = -EINVAL;
+        PDEBUG("Wrong command");
+        retval = -ENOTTY;
         break;
     }
 
